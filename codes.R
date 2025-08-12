@@ -4,6 +4,7 @@ library(dplyr)
 library(janitor)
 library(ggplot2)
 library(scales)
+library(viridis)
 
 ###Organizando os dados------------
 
@@ -127,6 +128,7 @@ barplot_porcentagem <- ggplot(dados_porcentagem, aes(x = religiao, y = porcentag
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_y_continuous(limits = c(0, max(dados_porcentagem$porcentagem) * 1.1))
 
+barplot_porcentagem
 ggsave(
   filename = "barplot_porcentagem.png",  # Nome do arquivo (pode ser .png, .jpg, .pdf, etc.)
   plot = barplot_porcentagem,            # Objeto do gráfico
@@ -140,19 +142,18 @@ barplot_porcentagem
 
 #Grafico de porcentagens empilhado
 
+dados_porcentagem <- dados_porcentagem %>%
+  mutate(religiao = stringr::str_wrap(religiao, width = 10))
+
 ggplot(dados_porcentagem, aes(x = religiao, y = porcentagem, fill = genero)) +
-  geom_bar(stat = "identity", position = "stack") +
+  geom_bar(stat = "identity", position = "stack", width = 0.8) +
   geom_text(aes(label = sprintf("%.1f%%", porcentagem)),
             position = position_stack(vjust = 0.5),
             size = 3, color = "white", fontface = "bold") +
   labs(title = "Distribuição por Religião e Gênero",
        subtitle = "Em porcentagem do total geral",
        x = NULL, y = "Porcentagem (%)") +
-  scale_fill_manual(
-    values = c("Homens" = "#36173D", 
-               "Mulheres" = "#FF4845"),
-    name = NULL,
-    guide = guide_legend(reverse = TRUE)  # Inverte a ordem na legenda
+  scale_fill_viridis_d(option = "E")  # Inverte a ordem na legenda
   ) +
   theme_minimal() +
   theme(
@@ -251,16 +252,17 @@ ggplot(dados_todos_juntos, aes(x = religiao, y = total, fill = religiao)) +
     axis.text = element_blank(),
     axis.ticks = element_blank(),
     panel.grid = element_blank(),
-    legend.position = "bottom",  # Move legenda para baixo
-    legend.key.size = unit(0.3, "cm"),  # Reduz tamanho dos ícones
-    legend.text = element_text(size = 7),  # Reduz tamanho do texto
-    legend.title = element_blank(),  # Remove título da legenda
+    legend.position = "bottom",
+    legend.key.size = unit(0.3, "cm"),
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
     strip.background = element_blank(),
     plot.title = element_text(hjust = 0.5, face = "bold", size = 12),
     panel.spacing = unit(0.5, "lines")
   ) +
   scale_y_continuous(expand = c(0, 0)) +
-  guides(fill = guide_legend(nrow = 2))  # Legenda em 2 linhas
+  guides(fill = guide_legend(nrow = 2)) +
+  scale_fill_viridis_d(option = "C")  # "C" = viridis escuro (azul/verde)
 
 # Calcular proporções por município
 dados_densidade <- dados_todos_juntos %>%
@@ -269,7 +271,47 @@ dados_densidade <- dados_todos_juntos %>%
   ungroup()
 
 
+#heatmap municipios porcentagem
+write.csv(dados_densidade, "dados_densidade.csv", row.names = FALSE)
 
+dados_densidade <- dados_densidade %>%
+  group_by(municipio) %>%
+  mutate(total_cidade = sum(total),
+         porcentagem_correta = total / total_cidade * 100) %>%
+  ungroup()
+
+head(dados_densidade %>% select(municipio, religiao, total, proporcao, porcentagem_correta))
+
+# Filtrar apenas os dados da religião católica
+dados_catolicos <- dados_densidade %>% 
+  filter(religiao == "Católica Apostólica Romana")
+
+# Criar o heatmap
+heatmap <- ggplot(dados_catolicos, aes(x = 1, y = reorder(municipio, porcentagem_correta), 
+                            fill = porcentagem_correta)) +
+  geom_tile(color = "white", height = 1, width = 1) +  # altura menor = mais espaço
+  geom_text(aes(label = paste0(round(porcentagem_correta, 1), "%")), 
+            color = "white", size = 3, fontface = "bold") +
+  scale_fill_viridis(option = "C", direction = -1,
+                     name = "Porcentagem de Católicos") +
+  labs(
+    title = "Distribuição de Católicos por Município",
+    subtitle = "Porcentagem da população que declara ser Católica Apostólica Romana",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 7, margin = margin(r = 6)),
+    panel.grid = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 10),
+    legend.position = "right",
+    plot.margin = margin(10, 10, 10, 10)
+  ) +
+  coord_fixed(ratio = 0.02)  # valor um pouco maior afasta mais ainda
+
+ggsave("heatmap_catolicos.png", plot = heatmap, width = 18, height = 10, dpi = 300)
 
 ###Gráficos Dioceses--------------
 
@@ -294,7 +336,7 @@ ggplot(dados_com_grupo, aes(x = religiao, y = porcentagem, fill = religiao)) +
     axis.text.x = element_text(angle = 90, hjust = 1),  # Rótulos verticais
     legend.position = "none",  # Remove a legenda para evitar repetição
     strip.text = element_text(size = 10, face = "bold")  # Estilo dos títulos dos painéis
-  )
+  ) + scale_fill_viridis_d(option = "E")
 
 
 #boxplot
@@ -312,3 +354,8 @@ ggplot(dados_vitoria, aes(x = religiao, y = total, fill = religiao)) +
         legend.position = "none") +
   scale_fill_brewer(palette = "Set3") +
   scale_y_continuous(labels = scales::comma)  # Formato numérico legível
+
+
+
+
+
